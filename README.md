@@ -1,6 +1,6 @@
 # ScreenRecorder
 
-**Screen Recording Service** iOS Example<br /> - Write and Merge **video & audio** asset sources
+**Video & Audio Recording Service** iOS Example<br /> - Write and Merge asset sources
 
 ## APIs
 
@@ -13,7 +13,7 @@ class AssetWriterService {
 
 class ScreenRecorder {
     func startRecord(isMicEnabled: Bool)
-    func stopRecord()
+    func stopRecord() async throws -> URL?
 }
 ```
 

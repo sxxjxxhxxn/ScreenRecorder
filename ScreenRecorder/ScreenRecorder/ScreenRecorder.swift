@@ -41,9 +41,9 @@ final class ScreenRecorder: NSObject {
             .sink(receiveValue: { [weak self] _ in
                 Task {
                     do {
-                        _ = try await self?.stopCapture()
+                        _ = try await self?.stopRecord()
                     } catch(let error) {
-                        print(error)
+                        debugPrint(error)
                     }
                 }
             })
@@ -60,7 +60,8 @@ final class ScreenRecorder: NSObject {
             .store(in: &cancellable)
     }
     
-    func startCapture(isMicrophoneEnabled: Bool) {
+    @MainActor
+    func startRecord(isMicEnabled: Bool) {
         guard recorder.isAvailable,
               recorder.isRecording == false,
               state == .done else {
@@ -69,11 +70,12 @@ final class ScreenRecorder: NSObject {
         }
         
         if let setUpError = assetWriter.setUp() {
+            debugPrint(setUpError)
             discard()
             return
         }
         
-        recorder.isMicrophoneEnabled = isMicrophoneEnabled
+        recorder.isMicrophoneEnabled = isMicEnabled
         recorder.startCapture { [weak self] buffer, bufferType, error in
             guard let self else {
                 RPScreenRecorder.shared().stopCapture()
@@ -81,7 +83,7 @@ final class ScreenRecorder: NSObject {
             }
             
             if let error {
-                print(error)
+                debugPrint(error)
                 return
             }
             
@@ -92,12 +94,13 @@ final class ScreenRecorder: NSObject {
             }
             
             self.assetWriter.write(buffer: buffer, bufferType: bufferType) { error in
-                print(error)
+                debugPrint(error)
             }
         }
     }
     
-    func stopCapture() async throws -> URL? {
+    @MainActor
+    func stopRecord() async throws -> URL? {
         guard recorder.isRecording,
               state == .recording else {
             discard()

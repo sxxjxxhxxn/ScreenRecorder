@@ -61,8 +61,8 @@ public final class AssetWriterService {
     
     public func finishWriting(completionHandler handler: Handler = nil) {
         writeQueue.async { [weak self] in
-            self?.videoWriter.finish { self?.completion(handler: handler) }
-            self?.audioWriter.finish { self?.completion(handler: handler) }
+            self?.videoWriter.finish { Task { await self?.completion(handler: handler) } }
+            self?.audioWriter.finish { Task { await self?.completion(handler: handler) } }
         }
     }
     
@@ -82,25 +82,25 @@ public final class AssetWriterService {
         return nil
     }
     
-    private func completion(handler: Handler) {
+    private func completion(handler: Handler) async {
         guard videoWriter.isFinished && audioWriter.isFinished else { return }
         guard handler != nil else { return }
-        mergeAndExport(handler: handler)
+        await mergeAndExport(handler: handler)
     }
     
-    private func mergeComposition(_ composition: AVMutableComposition, writer: AssetWriter) -> Result<Void, AssetWriterError> {
+    private func mergeComposition(_ composition: AVMutableComposition, writer: AssetWriter) async -> Result<Void, AssetWriterError> {
         let asset = AVAsset(url: URL(fileURLWithPath: writer.mediaType.path))
-        let tracks = asset.tracks(withMediaType: writer.mediaType.avMediaType)
+        let tracks = try? await asset.loadTracks(withMediaType: writer.mediaType.avMediaType)
         
-        guard !tracks.isEmpty else { return .failure(.emptyTracks) }
+        guard let tracks else { return .failure(.emptyTracks) }
         
         for track in tracks {
             let mutableTrack = composition.addMutableTrack(withMediaType: writer.mediaType.avMediaType,
                                                            preferredTrackID: kCMPersistentTrackID_Invalid)
             do {
-                try mutableTrack?.insertTimeRange(CMTimeRange(start: .zero, end: asset.duration),
-                                                  of: track,
-                                                  at: .zero)
+                try await mutableTrack?.insertTimeRange(CMTimeRange(start: .zero, end: asset.load(.duration)),
+                                                        of: track,
+                                                        at: .zero)
             } catch {
                 return .failure(.insertTimeRange(error))
             }
@@ -108,16 +108,16 @@ public final class AssetWriterService {
         return .success(Void())
     }
     
-    private func mergeAndExport(handler: Handler) {
+    private func mergeAndExport(handler: Handler) async {
         let composition = AVMutableComposition()
 
         // merge video asset
-        if case .failure(let error) = mergeComposition(composition, writer: videoWriter) {
+        if case .failure(let error) = await mergeComposition(composition, writer: videoWriter) {
             handler?(.failure(error))
             return
         }
         // merge audio asset
-        if case .failure(let error) = mergeComposition(composition, writer: audioWriter) {
+        if case .failure(let error) = await mergeComposition(composition, writer: audioWriter) {
             handler?(.failure(error))
             return
         }
@@ -134,8 +134,8 @@ public final class AssetWriterService {
         exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
         exportSession.outputURL = filePathURL
-        exportSession.exportAsynchronously {
-            switch exportSession.error {
+        exportSession.exportAsynchronously { [weak exportSession] in
+            switch exportSession?.error {
             case .none:
                 handler?(.success(filePathURL))
             case .some(let error):
@@ -155,3 +155,5 @@ extension AssetWriterService {
         case failedExportSession
     }
 }
+
+extension AVAssetExportSession: @retroactive @unchecked Sendable { }
