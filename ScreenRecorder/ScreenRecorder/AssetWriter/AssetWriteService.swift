@@ -14,7 +14,7 @@ public final class AssetWriterService {
     private let clipOutputString: String
     private var audioWriter = AssetWriter(mediaType: .audio)
     private var videoWriter = AssetWriter(mediaType: .video)
-    private let writeQueue = DispatchQueue(label: "Bora.AssetWriterQueue")
+    private let writeQueue = DispatchQueue(label: "AssetWriterService.AssetWriterQueue")
     
     public init() {
         let path = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)[0] as NSString
